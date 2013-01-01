@@ -8,11 +8,13 @@
 
 #include <mavros_msgs/ManualControl.h>
 #include <mavros_msgs/RCIn.h>
+#include <mavros_msgs/CommandBool.h>
 #include <geometry_msgs/Vector3Stamped.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <geometry_msgs/TwistStamped.h>
 #include <geometry_msgs/TransformStamped.h>
 #include <geometry_msgs/PointStamped.h>
+#include <geometry_msgs/Point.h>
 #include <sensor_msgs/Imu.h>
 #include <vi_ekf/teensyPilot.h>
 #include <std_msgs/Bool.h>
@@ -28,6 +30,10 @@
 #define RC_OFFBOARD		2
 #define RC_POSITION		1
 #define RC_MANUAL		0
+
+#define TAG_ACT_HOVER		0
+#define TAG_ACT_LAND		1
+#define TAG_ACT_TAKEOFF		2
 
 using namespace Eigen;
 
@@ -68,14 +74,17 @@ class px4handler
 	bool				lock_exposure_;		// We have this for make sure only send system message for once for transation
 	// initiate control variables
 	double				tag_delta_track_[2]; // feedback control for x-y velocity
-	
+	int				tag_target_id_;
+	int				tag_target_action_;
+
 	// ROS subscribers
 	ros::Subscriber	rclistener_;
 	ros::Subscriber	imulistener_;
 	ros::Subscriber viekflistener_;
-	ros::Subscriber teensylister_;
+	ros::Subscriber teensylistener_;
 	ros::Subscriber px4pose_listener_;
 	ros::Subscriber alvarlistener_;
+	ros::Subscriber target_tag_listener_;
 
 	// ROS publishers
 	ros::Publisher  accelerationcommander_;
@@ -84,7 +93,11 @@ class px4handler
 	ros::Publisher	local_setpoint_pub_;
 	ros::Publisher	cmd_vel_pub_;
 	ros::Publisher	point_debugger_;
-	
+	ros::Publisher 	tag_tracking_debugger_;
+
+	// ROS client
+	ros::ServiceClient arming_client_;
+
 	// subscriber callbacks
 	void rc_cb		(const mavros_msgs::RCIn::ConstPtr& msgin);
 	void imu_cb		(const sensor_msgs::Imu::ConstPtr& msgin);
@@ -92,7 +105,7 @@ class px4handler
 	void viekf_cb		(const vi_ekf::teensyPilot::ConstPtr& msgin);
 	void px4pose_cb		(const geometry_msgs::PoseStamped::ConstPtr& msgin);
 	void AlvarMarkers_cb	(const ar_track_alvar_msgs::AlvarMarkers::ConstPtr& msgin);
-	
+	void target_tag_cb	(const geometry_msgs::Point::ConstPtr& msgin);
 };
 
 

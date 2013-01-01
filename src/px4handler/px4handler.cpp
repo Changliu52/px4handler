@@ -13,14 +13,17 @@ px4handler::px4handler(ros::NodeHandle* nh, double loophz)
 	// for tag
 	tag_delta_track_[0] = 0.0; // feedback control for x-y velocity
 	tag_delta_track_[1] = 0.0;
-	
+	tag_target_id_      = 4; // x is the target id
+        tag_target_action_  = 0; // y is the target action: 0 is hover tracking, 1 is land, 2 is takeoff
+
 	//init subscriber
 	rclistener_			= nh->subscribe <mavros_msgs::RCIn>			("mavros/rc/in",		1, &px4handler::rc_cb,			this);
 	px4pose_listener_		= nh->subscribe <geometry_msgs::PoseStamped>		("mavros/local_position/pose",	1, &px4handler::px4pose_cb,		this);
 	viekflistener_			= nh->subscribe <vi_ekf::teensyPilot>			("ekf/output",			1, &px4handler::viekf_cb,		this);
 	alvarlistener_			= nh->subscribe <ar_track_alvar_msgs::AlvarMarkers>	("ar_pose_marker",		1, &px4handler::AlvarMarkers_cb,	this);
-	teensylister_			= nh->subscribe <geometry_msgs::TransformStamped>	("teensy/imu",			1, &px4handler::teensy_cb,		this);
-	
+	teensylistener_			= nh->subscribe <geometry_msgs::TransformStamped>	("teensy/imu",			1, &px4handler::teensy_cb,		this);
+	target_tag_listener_		= nh->subscribe <geometry_msgs::Point>			("px4handler/tag_target",	1, &px4handler::target_tag_cb,		this);
+
 	//init publisher
 	accelerationcommander_		= nh->advertise <geometry_msgs::Vector3Stamped>	("mavros/setpoint_accel/accel",		1);
 	accelerationcommander_param_	= nh->advertise <std_msgs::Bool>		("mavros/setpoint_accel/send_force",	1);
@@ -28,6 +31,10 @@ px4handler::px4handler(ros::NodeHandle* nh, double loophz)
 	local_setpoint_pub_		= nh->advertise <geometry_msgs::PoseStamped>	("mavros/setpoint_position/local",	1);
 	cmd_vel_pub_			= nh->advertise <geometry_msgs::TwistStamped>	("mavros/setpoint_velocity/cmd_vel",	1);
 	point_debugger_			= nh->advertise <geometry_msgs::PointStamped>	("px4handler/debug/point",		1);
+	tag_tracking_debugger_		= nh->advertise <geometry_msgs::Point>		("px4handler/debug/tag_target",		1);
+
+	// init clients
+	arming_client_ 			= nh->serviceClient <mavros_msgs::CommandBool> ("mavros/cmd/arming");
 }
 
 
@@ -129,15 +136,25 @@ void px4handler::publish_setpoint_heading_from_rc()
 
 void px4handler::publish_setpoint_velo_from_tag()
 {
-	double velo_ctl_scale = 0.5;
+	// construct basic loiter command
+	double velo_ctl_scale = 1.0;
 	geometry_msgs::TwistStamped target_velocity;
 	target_velocity.header.stamp	= ros::Time::now();
-	target_velocity.twist.linear.x	= -0.5 * tag_delta_track_[0];
-	target_velocity.twist.linear.y	= -0.5 * tag_delta_track_[1];
+	target_velocity.twist.linear.x	= velo_ctl_scale * tag_delta_track_[0];
+	target_velocity.twist.linear.y	= velo_ctl_scale * tag_delta_track_[1];
 	target_velocity.twist.linear.z	= 0.0;
 	target_velocity.twist.angular.x	= 0.0;//q_world_to_cam[0];
 	target_velocity.twist.angular.y = 0.0;//p_tag_in_world_relative_to_px4[1];
 	target_velocity.twist.angular.z = 0.0;//Imu_.orientation.w;
+
+	// do reasoning
+	if(tag_target_action_ == TAG_ACT_TAKEOFF) {
+		
+	} else if(tag_target_action_ == TAG_ACT_LAND) {
+		target_velocity.twist.linear.z  = -0.25;
+	}
+
+	// send command
 	cmd_vel_pub_.publish(target_velocity);
 }
 
@@ -261,17 +278,19 @@ void px4handler::AlvarMarkers_cb(const ar_track_alvar_msgs::AlvarMarkers::ConstP
 		// for each detected marker get their position relative to the px4
 		for (int i=0; i<n_tags; i++) {
 			int tag_id = msgin->markers[i].id;
-			double p_tag_in_cam[4] = {0.0,	msgin->markers[i].pose.pose.position.x, 
-							msgin->markers[i].pose.pose.position.y, 
-							msgin->markers[i].pose.pose.position.z};
-			double p_tag_in_world_relative_to_px4[4];
-			QuatRot(p_tag_in_cam, 
-				q_world_to_cam,
-				p_tag_in_world_relative_to_px4);
+			if (tag_id == tag_target_id_){
+				double p_tag_in_cam[4] = {0.0,	msgin->markers[i].pose.pose.position.x,
+								msgin->markers[i].pose.pose.position.y,
+								msgin->markers[i].pose.pose.position.z};
+				double p_tag_in_world_relative_to_px4[4];
+				QuatRot(p_tag_in_cam,
+					q_world_to_cam,
+					p_tag_in_world_relative_to_px4);
 				
-			// average to find the centre
-			tag_delta_track_[0] += (p_tag_in_world_relative_to_px4[1] / (double)n_tags); //x relative position to the centre of tags
-			tag_delta_track_[1] += (p_tag_in_world_relative_to_px4[2] / (double)n_tags); //y relative position to the centre of tags
+				// average to find the centre
+				tag_delta_track_[0] += (p_tag_in_world_relative_to_px4[1] / (double)n_tags); //x relative position to the centre of tags
+				tag_delta_track_[1] += (p_tag_in_world_relative_to_px4[2] / (double)n_tags); //y relative position to the centre of tags
+			}
 		}
 	}	
 	
@@ -285,4 +304,17 @@ void px4handler::AlvarMarkers_cb(const ar_track_alvar_msgs::AlvarMarkers::ConstP
 		tag_delta.point.z = 0.0;
 		point_debugger_.publish(tag_delta);
 	}
+	if (tag_tracking_debugger_.getNumSubscribers()>0) {
+		geometry_msgs::Point	output;
+		output.x = tag_target_id_;
+		output.y = tag_target_action_;
+		tag_tracking_debugger_.publish(output);
+	}
+}
+
+// Callback function to update the target tag id
+void px4handler::target_tag_cb(const geometry_msgs::Point::ConstPtr& msgin)
+{
+	tag_target_id_ 		= (int)msgin->x; // x is the target id
+	tag_target_action_ 	= (int)msgin->y; // y is the target action: 0 is hover tracking, 1 is land, 2 is takeoff
 }
