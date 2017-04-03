@@ -13,6 +13,9 @@
 #include <sensor_msgs/Imu.h>
 #include <vi_ekf/teensyPilot.h>
 #include <std_msgs/Bool.h>
+#include <ar_track_alvar_msgs/AlvarMarker.h>
+
+#include <px4handler/HelperFunc.h>
 
 #define EKF_NO_ACTION		0
 #define EKF_SAFE_OUTPUT		1
@@ -60,6 +63,7 @@ class px4handler
 	ros::Subscriber	rclistener_;
 	ros::Subscriber	imulistener_;
 	ros::Subscriber viekflistener_;
+	ros::Subscriber alvarlistener_;
 
 	// ROS publishers
 	ros::Publisher  accelerationcommander_;
@@ -71,6 +75,7 @@ class px4handler
 	void rc_cb(const mavros_msgs::RCIn::ConstPtr& msgin);
 	void imu_cb(const sensor_msgs::Imu::ConstPtr& msgin);
 	void viekf_cb(const vi_ekf::teensyPilot::ConstPtr& msgin);
+	void AlvarMarker_cb(const ar_track_alvar_msgs::AlvarMarker::ConstPtr& msgin);
 	
 };
 

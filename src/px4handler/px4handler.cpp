@@ -11,8 +11,9 @@ px4handler::px4handler(ros::NodeHandle* nh, double loophz)
 	system("rosrun dynamic_reconfigure dynparam set /ueye_cam_nodelet lock_exposure false");
 	
 	//init subscriber
-	rclistener_			= nh->subscribe <mavros_msgs::RCIn>	("mavros/rc/in", 1, &px4handler::rc_cb,    this);
-	viekflistener_			= nh->subscribe <vi_ekf::teensyPilot>	("/ekf/output",  1, &px4handler::viekf_cb, this);
+	rclistener_			= nh->subscribe <mavros_msgs::RCIn>			("mavros/rc/in",	1, &px4handler::rc_cb,		this);
+	viekflistener_			= nh->subscribe <vi_ekf::teensyPilot>			("ekf/output",		1, &px4handler::viekf_cb,	this);
+	alvarlistener_			= nh->subscribe <ar_track_alvar_msgs::AlvarMarker>	("ar_pose_marker",	1, &px4handler::AlvarMarker_cb, this);
 	
 	//init publisher
 	accelerationcommander_		= nh->advertise <geometry_msgs::Vector3Stamped>	("mavros/setpoint_accel/accel",		1);
@@ -165,14 +166,44 @@ void px4handler::viekf_cb(const vi_ekf::teensyPilot::ConstPtr& msgin)
 {
 	ekf_state_ = *msgin;
 	if (ekf_state_.status == EKF_SAFE_OUTPUT) {
+		// rotate coordinate frame (180 degree rotation about world x axis)
+		double q[4] = {(double)ekf_state_.qw, (double)ekf_state_.qx, (double)ekf_state_.qy, (double)ekf_state_.qz};
+		double p[4] = {0.0,		      (double)ekf_state_.px, (double)ekf_state_.py, (double)ekf_state_.pz};
+		double frame_rot[4] = {0.0, 1.0, 0.0, 0.0}; // 180 degree rotation about world x axis
+		
+		double p_corrected[4]; // position
+		QuatRot(p, frame_rot, p_corrected); // frame_rot*p*frame_rot^(-1) = p_corrected
+		
+		double q_corrected[4];
+		q_mult(q, frame_rot, q_corrected); // do frame rotate first then to q rotate, (we are rotating the frame_rot by q) q*frame_rot=qcorrected
+		
+		// generate output message
 		vision_pose_.header.stamp	= ros::Time::now();
 		vision_pose_.header.frame_id	= "fcu";
-		vision_pose_.pose.orientation.w	= (double)ekf_state_.qw;
-		vision_pose_.pose.orientation.x	= (double)ekf_state_.qx;
-		vision_pose_.pose.orientation.y	= (double)ekf_state_.qy;
-		vision_pose_.pose.orientation.z	= (double)ekf_state_.qz;
-		vision_pose_.pose.position.x	= (double)ekf_state_.px;
-		vision_pose_.pose.position.y	= (double)ekf_state_.py;
-		vision_pose_.pose.position.z	= (double)ekf_state_.pz;
+		vision_pose_.pose.orientation.w	= q_corrected[0];
+		vision_pose_.pose.orientation.x	= q_corrected[1];
+		vision_pose_.pose.orientation.y	= q_corrected[2];
+		vision_pose_.pose.orientation.z	= q_corrected[3];
+		vision_pose_.pose.position.x	= p[1];
+		vision_pose_.pose.position.y	= p[2];
+		vision_pose_.pose.position.z	= p[3];
+		
+		//vision_pose_.pose.position.x	= p_corrected[1];
+		//vision_pose_.pose.position.y	= p_corrected[2];
+		//vision_pose_.pose.position.z	= p_corrected[3];
+		
+		//vision_pose_.pose.orientation.w	= (double)ekf_state_.qw;
+		//vision_pose_.pose.orientation.x	= (double)ekf_state_.qx;
+		//vision_pose_.pose.orientation.y	= (double)ekf_state_.qy;
+		//vision_pose_.pose.orientation.z	= (double)ekf_state_.qz;
+		//vision_pose_.pose.position.x	= (double)ekf_state_.px;
+		//vision_pose_.pose.position.y	= (double)ekf_state_.py;
+		//vision_pose_.pose.position.z	= (double)ekf_state_.pz;
 	}
+}
+
+// Callback function for ar_tracker_alvar message
+void px4handler::AlvarMarker_cb(const ar_track_alvar_msgs::AlvarMarker::ConstPtr& msgin)
+{
+	
 }

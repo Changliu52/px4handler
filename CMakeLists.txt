@@ -124,7 +124,8 @@ include_directories(
 
 ## Declare a C++ library
 add_library(px4handler
-   src/px4handler/px4handler.cpp)
+   src/px4handler/px4handler.cpp
+   src/px4handler/HelperFunc.cpp)
 
 ## Add cmake target dependencies of the library
 ## as an example, code may need to be generated before libraries

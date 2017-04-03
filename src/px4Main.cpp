@@ -11,7 +11,7 @@ int main(int argc, char **argv)
 	
 	//_____________________________________
 	// Main px4 handler init
-	double LoopHz = 6.0;
+	double LoopHz = 7.0;
 	px4handler px4(&roshandler, LoopHz);
 	
 	// RUN
