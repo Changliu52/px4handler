@@ -10,10 +10,11 @@
 #include <mavros_msgs/RCIn.h>
 #include <geometry_msgs/Vector3Stamped.h>
 #include <geometry_msgs/PoseStamped.h>
+#include <geometry_msgs/TwistStamped.h>
 #include <sensor_msgs/Imu.h>
 #include <vi_ekf/teensyPilot.h>
 #include <std_msgs/Bool.h>
-#include <ar_track_alvar_msgs/AlvarMarker.h>
+#include <ar_track_alvar_msgs/AlvarMarkers.h>
 
 #include <px4handler/HelperFunc.h>
 
@@ -70,12 +71,13 @@ class px4handler
 	ros::Publisher  accelerationcommander_param_;
 	ros::Publisher	vision_pose_pub_;
 	ros::Publisher	local_setpoint_pub_;
+	ros::Publisher	cmd_vel_pub_;
 	
 	// subscriber callbacks
-	void rc_cb(const mavros_msgs::RCIn::ConstPtr& msgin);
-	void imu_cb(const sensor_msgs::Imu::ConstPtr& msgin);
-	void viekf_cb(const vi_ekf::teensyPilot::ConstPtr& msgin);
-	void AlvarMarker_cb(const ar_track_alvar_msgs::AlvarMarker::ConstPtr& msgin);
+	void rc_cb		(const mavros_msgs::RCIn::ConstPtr& msgin);
+	void imu_cb		(const sensor_msgs::Imu::ConstPtr& msgin);
+	void viekf_cb		(const vi_ekf::teensyPilot::ConstPtr& msgin);
+	void AlvarMarkers_cb	(const ar_track_alvar_msgs::AlvarMarkers::ConstPtr& msgin);
 	
 };
 

@@ -8,18 +8,19 @@ px4handler::px4handler(ros::NodeHandle* nh, double loophz)
 	
 	// for camera exposure
 	lock_exposure_ = 0;
-	system("rosrun dynamic_reconfigure dynparam set /ueye_cam_nodelet lock_exposure false");
+	system("rosrun dynamic_reconfigure dynparam set ueye_cam_nodelet lock_exposure false");
 	
 	//init subscriber
 	rclistener_			= nh->subscribe <mavros_msgs::RCIn>			("mavros/rc/in",	1, &px4handler::rc_cb,		this);
 	viekflistener_			= nh->subscribe <vi_ekf::teensyPilot>			("ekf/output",		1, &px4handler::viekf_cb,	this);
-	alvarlistener_			= nh->subscribe <ar_track_alvar_msgs::AlvarMarker>	("ar_pose_marker",	1, &px4handler::AlvarMarker_cb, this);
+	alvarlistener_			= nh->subscribe <ar_track_alvar_msgs::AlvarMarkers>	("ar_pose_marker",	1, &px4handler::AlvarMarkers_cb, this);
 	
 	//init publisher
 	accelerationcommander_		= nh->advertise <geometry_msgs::Vector3Stamped>	("mavros/setpoint_accel/accel",		1);
 	accelerationcommander_param_	= nh->advertise <std_msgs::Bool>		("mavros/setpoint_accel/send_force",	1);
 	vision_pose_pub_		= nh->advertise <geometry_msgs::PoseStamped>	("mavros/vision_pose/pose",		1);
 	local_setpoint_pub_		= nh->advertise <geometry_msgs::PoseStamped>	("mavros/setpoint_position/local",	1);
+	cmd_vel_pub_			= nh->advertise <geometry_msgs::TwistStamped>	("mavros/setpoint_velocity/cmd_vel",	1);
 }
 
 
@@ -38,7 +39,7 @@ void px4handler::interface_vi_ekf()
 	if (rc_command_.buttons == RC_OFFBOARD || rc_command_.buttons == RC_POSITION)	{
 		publish_setpoint_heading_from_rc();
 		if (lock_exposure_ == 0){
-			system("rosrun dynamic_reconfigure dynparam set /ueye_cam_nodelet lock_exposure true");
+			system("rosrun dynamic_reconfigure dynparam set ueye_cam_nodelet lock_exposure true");
 			lock_exposure_ = 1;
 		}
 	// there theRC is in manual mode
@@ -46,7 +47,7 @@ void px4handler::interface_vi_ekf()
 		publish_setpoint_heading_from_rc(); // publish position-heading setpoint even not in offboard mode (this is to avoid offboard mode being rejected
 		reset_setpoint_pose();
 		if (lock_exposure_ == 1){
-			system("rosrun dynamic_reconfigure dynparam set /ueye_cam_nodelet lock_exposure false");
+			system("rosrun dynamic_reconfigure dynparam set ueye_cam_nodelet lock_exposure false");
 			lock_exposure_ = 0;
 		}
 	}
@@ -203,7 +204,9 @@ void px4handler::viekf_cb(const vi_ekf::teensyPilot::ConstPtr& msgin)
 }
 
 // Callback function for ar_tracker_alvar message
-void px4handler::AlvarMarker_cb(const ar_track_alvar_msgs::AlvarMarker::ConstPtr& msgin)
+void px4handler::AlvarMarkers_cb(const ar_track_alvar_msgs::AlvarMarkers::ConstPtr& msgin)
 {
-	
+	geometry_msgs::TwistStamped target_velocity;
+	target_velocity.header.stamp	= ros::Time::now();
+	cmd_vel_pub_.publish(target_velocity);
 }
