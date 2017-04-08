@@ -56,6 +56,7 @@ class px4handler
 	mavros_msgs::ManualControl	rc_command_;		// rc_command_.x, y, z, r in float32; rc_command_.buttons in uint16_t (Note: buttons is used for rc status, refers to #define
 	vi_ekf::teensyPilot		ekf_state_;		// ekf_output_.qw, qx, qy, qz, px, py, pz, vx, vy, vz, bx, by, bz, lambda, status, in float, status refers to #define
 	geometry_msgs::PoseStamped	vision_pose_;		// ekf_state_ estimation copied in the form of posestamped format
+	geometry_msgs::PoseStamped	px4_pose_;		// ekf_state_ estimation copied in the form of posestamped format
 	sensor_msgs::Imu		Imu_;			// imu messurement from pixhawk
 	geometry_msgs::PoseStamped	setpoint_pose_;		// position command to control the pixhawk
 	bool				lock_exposure_;		// We have this for make sure only send system message for once for transation
@@ -64,6 +65,7 @@ class px4handler
 	ros::Subscriber	rclistener_;
 	ros::Subscriber	imulistener_;
 	ros::Subscriber viekflistener_;
+	ros::Subscriber px4pose_listener_;
 	ros::Subscriber alvarlistener_;
 
 	// ROS publishers
@@ -77,6 +79,7 @@ class px4handler
 	void rc_cb		(const mavros_msgs::RCIn::ConstPtr& msgin);
 	void imu_cb		(const sensor_msgs::Imu::ConstPtr& msgin);
 	void viekf_cb		(const vi_ekf::teensyPilot::ConstPtr& msgin);
+	void px4pose_cb		(const geometry_msgs::PoseStamped::ConstPtr& msgin);
 	void AlvarMarkers_cb	(const ar_track_alvar_msgs::AlvarMarkers::ConstPtr& msgin);
 	
 };
