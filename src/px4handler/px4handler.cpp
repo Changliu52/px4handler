@@ -10,11 +10,16 @@ px4handler::px4handler(ros::NodeHandle* nh, double loophz)
 	lock_exposure_ = 0;
 	system("rosrun dynamic_reconfigure dynparam set ueye_cam_nodelet lock_exposure false");
 	
+	// for tag
+	tag_delta_track_[0] = 0.0; // feedback control for x-y velocity
+	tag_delta_track_[1] = 0.0;
+	
 	//init subscriber
 	rclistener_			= nh->subscribe <mavros_msgs::RCIn>			("mavros/rc/in",		1, &px4handler::rc_cb,			this);
 	px4pose_listener_		= nh->subscribe <geometry_msgs::PoseStamped>		("mavros/local_position/pose",	1, &px4handler::px4pose_cb,		this);
 	viekflistener_			= nh->subscribe <vi_ekf::teensyPilot>			("ekf/output",			1, &px4handler::viekf_cb,		this);
 	alvarlistener_			= nh->subscribe <ar_track_alvar_msgs::AlvarMarkers>	("ar_pose_marker",		1, &px4handler::AlvarMarkers_cb,	this);
+	teensylister_			= nh->subscribe <geometry_msgs::TransformStamped>	("teensy/imu",			1, &px4handler::teensy_cb,		this);
 	
 	//init publisher
 	accelerationcommander_		= nh->advertise <geometry_msgs::Vector3Stamped>	("mavros/setpoint_accel/accel",		1);
@@ -22,6 +27,7 @@ px4handler::px4handler(ros::NodeHandle* nh, double loophz)
 	vision_pose_pub_		= nh->advertise <geometry_msgs::PoseStamped>	("mavros/vision_pose/pose",		1);
 	local_setpoint_pub_		= nh->advertise <geometry_msgs::PoseStamped>	("mavros/setpoint_position/local",	1);
 	cmd_vel_pub_			= nh->advertise <geometry_msgs::TwistStamped>	("mavros/setpoint_velocity/cmd_vel",	1);
+	point_debugger_			= nh->advertise <geometry_msgs::PointStamped>	("px4handler/debug/point",		1);
 }
 
 
@@ -53,6 +59,8 @@ void px4handler::interface_vi_ekf()
 		}
 	}
 	
+	// publish velocity control feedback from tag
+	publish_setpoint_velo_from_tag();
 	/*
 	// when vision is available perform inteligent control
 	if (ekf_state_.status == EKF_SAFE_OUTPUT && rc_command_.buttons == RC_OFFBOARD) {
@@ -119,6 +127,19 @@ void px4handler::publish_setpoint_heading_from_rc()
 	local_setpoint_pub_.publish(setpoint_pose_);
 }
 
+void px4handler::publish_setpoint_velo_from_tag()
+{
+	double velo_ctl_scale = 0.5;
+	geometry_msgs::TwistStamped target_velocity;
+	target_velocity.header.stamp	= ros::Time::now();
+	target_velocity.twist.linear.x	= -0.5 * tag_delta_track_[0];
+	target_velocity.twist.linear.y	= -0.5 * tag_delta_track_[1];
+	target_velocity.twist.linear.z	= -0.25;
+	target_velocity.twist.angular.x	= 0.0;//q_world_to_cam[0];
+	target_velocity.twist.angular.y = 0.0;//p_tag_in_world_relative_to_px4[1];
+	target_velocity.twist.angular.z = 0.0;//Imu_.orientation.w;
+	cmd_vel_pub_.publish(target_velocity);
+}
 
 // function to reset position setpoint to align with current vision pose measurment
 void px4handler::reset_setpoint_pose()
@@ -211,24 +232,29 @@ void px4handler::px4pose_cb(const geometry_msgs::PoseStamped::ConstPtr& msgin)
 	px4_pose_ = *msgin;
 }
 
+// Callback function for teensy imu
+void px4handler::teensy_cb(const geometry_msgs::TransformStamped::ConstPtr& msgin)
+{
+	imu_teensy_ = *msgin;
+}
 
 // Callback function for ar_tracker_alvar message
 void px4handler::AlvarMarkers_cb(const ar_track_alvar_msgs::AlvarMarkers::ConstPtr& msgin)
-{
-	// initiate control variables
-	double delta_track[2] = {0.0, 0.0}; // feedback control for x-y velocity
-	
+{	
 	// See how many tags are detected
-	int n_tags = sizeof(msgin->markers)/sizeof(msgin->markers[0]);
+	int n_tags = msgin->markers.size();
 	
 	// Only do this when at least one tag is detected
-	if (n_tags > 0) {
+	if (n_tags > 0 && !isnan(px4_pose_.pose.orientation.w)) {
+		// Clear buffer
+		tag_delta_track_[0] = 0.0; tag_delta_track_[1] = 0.0;
+
 		// Get the camera rotation in world frame
 		double q_px4_to_cam[4] = {0.0, 1.0, 0.0, 0.0};
-		double q_world_to_px4[4] = {	px4_pose_.pose.orientation.w,
-						px4_pose_.pose.orientation.x, 
-						px4_pose_.pose.orientation.y, 
-						px4_pose_.pose.orientation.z};
+		double q_world_to_px4[4] = {	px4_pose_.pose.orientation.w, //Imu_.orientation.w, //px4_pose_.pose.orientation.w,  //imu_teensy_.transform.rotation.w, 
+						px4_pose_.pose.orientation.x, //Imu_.orientation.x, //px4_pose_.pose.orientation.x,  //imu_teensy_.transform.rotation.x, 
+						px4_pose_.pose.orientation.y, //Imu_.orientation.y, //px4_pose_.pose.orientation.y,  //imu_teensy_.transform.rotation.y, 
+						px4_pose_.pose.orientation.z}; //Imu_.orientation.z}; //px4_pose_.pose.orientation.z}; //imu_teensy_.transform.rotation.z
 		double q_world_to_cam[4];
 		q_mult(q_world_to_px4, q_px4_to_cam, q_world_to_cam);
 	
@@ -244,15 +270,17 @@ void px4handler::AlvarMarkers_cb(const ar_track_alvar_msgs::AlvarMarkers::ConstP
 				p_tag_in_world_relative_to_px4);
 				
 			// average to find the centre
-			delta_track[0] += (p_tag_in_world_relative_to_px4[1] / (double)n_tags); //x relative position to the centre of tags
-			delta_track[1] += (p_tag_in_world_relative_to_px4[2] / (double)n_tags); //y relative position to the centre of tags
+			tag_delta_track_[0] += (p_tag_in_world_relative_to_px4[1] / (double)n_tags); //x relative position to the centre of tags
+			tag_delta_track_[1] += (p_tag_in_world_relative_to_px4[2] / (double)n_tags); //y relative position to the centre of tags
 		}
-	}
-	// publish transformation
-	geometry_msgs::TwistStamped target_velocity;
-	target_velocity.header.stamp	= ros::Time::now();
-	target_velocity.twist.linear.x	= delta_track[0];
-	target_velocity.twist.linear.y	= delta_track[1];
-	target_velocity.twist.linear.z	= 1.0;
-	cmd_vel_pub_.publish(target_velocity);
+	}	
+	
+	// for debugging
+	geometry_msgs::PointStamped	tag_delta;		// the velocity feedback from tag tracking
+	tag_delta.header.stamp	= ros::Time::now();
+	tag_delta.header.frame_id	= "debug";
+	tag_delta.point.x = tag_delta_track_[0];
+	tag_delta.point.y = tag_delta_track_[1];
+	tag_delta.point.z = 0.0;
+	point_debugger_.publish(tag_delta);
 }

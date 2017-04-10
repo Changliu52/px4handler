@@ -11,6 +11,8 @@
 #include <geometry_msgs/Vector3Stamped.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <geometry_msgs/TwistStamped.h>
+#include <geometry_msgs/TransformStamped.h>
+#include <geometry_msgs/PointStamped.h>
 #include <sensor_msgs/Imu.h>
 #include <vi_ekf/teensyPilot.h>
 #include <std_msgs/Bool.h>
@@ -41,11 +43,12 @@ class px4handler
 	//______________________________________
 	// Public Functions
 	void interface_vi_ekf();
+	void reset_setpoint_pose();
 	void publish_acceleration_command_from_rc();
 	void publish_vision_pose_to_px4();		// converse ekf_state_ to vision_pose/pose (geometry_msgs/PoseStamped) and send out
 	void publish_vision_pose_to_px4_smoothed();
 	void publish_setpoint_heading_from_rc();
-	void reset_setpoint_pose();
+	void publish_setpoint_velo_from_tag();
 	
 	
 	//_____________________________________
@@ -58,13 +61,17 @@ class px4handler
 	geometry_msgs::PoseStamped	vision_pose_;		// ekf_state_ estimation copied in the form of posestamped format
 	geometry_msgs::PoseStamped	px4_pose_;		// ekf_state_ estimation copied in the form of posestamped format
 	sensor_msgs::Imu		Imu_;			// imu messurement from pixhawk
+	geometry_msgs::TransformStamped	imu_teensy_;		// imu infor from teensy
 	geometry_msgs::PoseStamped	setpoint_pose_;		// position command to control the pixhawk
 	bool				lock_exposure_;		// We have this for make sure only send system message for once for transation
+	// initiate control variables
+	double				tag_delta_track_[2]; // feedback control for x-y velocity
 	
 	// ROS subscribers
 	ros::Subscriber	rclistener_;
 	ros::Subscriber	imulistener_;
 	ros::Subscriber viekflistener_;
+	ros::Subscriber teensylister_;
 	ros::Subscriber px4pose_listener_;
 	ros::Subscriber alvarlistener_;
 
@@ -74,10 +81,12 @@ class px4handler
 	ros::Publisher	vision_pose_pub_;
 	ros::Publisher	local_setpoint_pub_;
 	ros::Publisher	cmd_vel_pub_;
+	ros::Publisher	point_debugger_;
 	
 	// subscriber callbacks
 	void rc_cb		(const mavros_msgs::RCIn::ConstPtr& msgin);
 	void imu_cb		(const sensor_msgs::Imu::ConstPtr& msgin);
+	void teensy_cb		(const geometry_msgs::TransformStamped::ConstPtr& msgin);
 	void viekf_cb		(const vi_ekf::teensyPilot::ConstPtr& msgin);
 	void px4pose_cb		(const geometry_msgs::PoseStamped::ConstPtr& msgin);
 	void AlvarMarkers_cb	(const ar_track_alvar_msgs::AlvarMarkers::ConstPtr& msgin);
