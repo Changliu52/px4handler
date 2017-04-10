@@ -44,14 +44,14 @@ void px4handler::interface_vi_ekf()
 	
 	// switching to offboard mode from RC
 	if (rc_command_.buttons == RC_OFFBOARD || rc_command_.buttons == RC_POSITION)	{
-		publish_setpoint_heading_from_rc();
+		//publish_setpoint_heading_from_rc();
 		if (lock_exposure_ == 0){
 			system("rosrun dynamic_reconfigure dynparam set ueye_cam_nodelet lock_exposure true");
 			lock_exposure_ = 1;
 		}
 	// there theRC is in manual mode
 	}else{
-		publish_setpoint_heading_from_rc(); // publish position-heading setpoint even not in offboard mode (this is to avoid offboard mode being rejected
+		//publish_setpoint_heading_from_rc(); // publish position-heading setpoint even not in offboard mode (this is to avoid offboard mode being rejected
 		reset_setpoint_pose();
 		if (lock_exposure_ == 1){
 			system("rosrun dynamic_reconfigure dynparam set ueye_cam_nodelet lock_exposure false");
@@ -134,7 +134,7 @@ void px4handler::publish_setpoint_velo_from_tag()
 	target_velocity.header.stamp	= ros::Time::now();
 	target_velocity.twist.linear.x	= -0.5 * tag_delta_track_[0];
 	target_velocity.twist.linear.y	= -0.5 * tag_delta_track_[1];
-	target_velocity.twist.linear.z	= -0.25;
+	target_velocity.twist.linear.z	= 0.0;
 	target_velocity.twist.angular.x	= 0.0;//q_world_to_cam[0];
 	target_velocity.twist.angular.y = 0.0;//p_tag_in_world_relative_to_px4[1];
 	target_velocity.twist.angular.z = 0.0;//Imu_.orientation.w;
