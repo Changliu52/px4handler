@@ -276,11 +276,13 @@ void px4handler::AlvarMarkers_cb(const ar_track_alvar_msgs::AlvarMarkers::ConstP
 	}	
 	
 	// for debugging
-	geometry_msgs::PointStamped	tag_delta;		// the velocity feedback from tag tracking
-	tag_delta.header.stamp	= ros::Time::now();
-	tag_delta.header.frame_id	= "debug";
-	tag_delta.point.x = tag_delta_track_[0];
-	tag_delta.point.y = tag_delta_track_[1];
-	tag_delta.point.z = 0.0;
-	point_debugger_.publish(tag_delta);
+	if (point_debugger_.getNumSubscribers()>0) {
+		geometry_msgs::PointStamped	tag_delta;		// the velocity feedback from tag tracking
+		tag_delta.header.stamp	= ros::Time::now();
+		tag_delta.header.frame_id	= "debug";
+		tag_delta.point.x = tag_delta_track_[0];
+		tag_delta.point.y = tag_delta_track_[1];
+		tag_delta.point.z = 0.0;
+		point_debugger_.publish(tag_delta);
+	}
 }

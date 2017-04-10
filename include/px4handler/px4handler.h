@@ -59,6 +59,8 @@ class px4handler
 	mavros_msgs::ManualControl	rc_command_;		// rc_command_.x, y, z, r in float32; rc_command_.buttons in uint16_t (Note: buttons is used for rc status, refers to #define
 	vi_ekf::teensyPilot		ekf_state_;		// ekf_output_.qw, qx, qy, qz, px, py, pz, vx, vy, vz, bx, by, bz, lambda, status, in float, status refers to #define
 	geometry_msgs::PoseStamped	vision_pose_;		// ekf_state_ estimation copied in the form of posestamped format
+	geometry_msgs::Pose		vision_pose_offset;	// the position and orientation offset to align vision with px4
+	geometry_msgs::Pose		vision_pose_aligned;	// the aligned position and orientation measurement from vision to be sent to px4
 	geometry_msgs::PoseStamped	px4_pose_;		// ekf_state_ estimation copied in the form of posestamped format
 	sensor_msgs::Imu		Imu_;			// imu messurement from pixhawk
 	geometry_msgs::TransformStamped	imu_teensy_;		// imu infor from teensy
