@@ -288,8 +288,8 @@ void px4handler::AlvarMarkers_cb(const ar_track_alvar_msgs::AlvarMarkers::ConstP
 					p_tag_in_world_relative_to_px4);
 				
 				// average to find the centre
-				tag_delta_track_[0] += (p_tag_in_world_relative_to_px4[1] / (double)n_tags); //x relative position to the centre of tags
-				tag_delta_track_[1] += (p_tag_in_world_relative_to_px4[2] / (double)n_tags); //y relative position to the centre of tags
+				tag_delta_track_[0] = p_tag_in_world_relative_to_px4[1]; //x relative position to the centre of tags
+				tag_delta_track_[1] = p_tag_in_world_relative_to_px4[2]; //y relative position to the centre of tags
 			}
 		}
 	}	
